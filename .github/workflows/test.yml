@@ -8,10 +8,29 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: syncstore
+          POSTGRES_PASSWORD: syncstore
+          POSTGRES_DB: syncstore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U syncstore"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: go vet ./...
-      - run: go test -race ./...
+      - name: core
+        run: go vet ./... && go test -race ./...
+      - name: syncstorepgx
+        working-directory: syncstorepgx
+        run: go vet ./... && go test -race ./...
+        env:
+          SYNCSTORE_TEST_DATABASE_URL: postgres://syncstore:syncstore@localhost:5432/syncstore?sslmode=disable
