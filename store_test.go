@@ -12,15 +12,15 @@ import (
 )
 
 type fakeListener struct {
-	signals chan syncstore.Signal
+	signals chan struct{}
 }
 
 // буфер — чтобы тесты слали пачки сигналов, не дожидаясь перечиток
 func newFakeListener() *fakeListener {
-	return &fakeListener{signals: make(chan syncstore.Signal, 16)}
+	return &fakeListener{signals: make(chan struct{}, 16)}
 }
 
-func (l *fakeListener) Listen(context.Context) (<-chan syncstore.Signal, error) {
+func (l *fakeListener) Listen(context.Context) (<-chan struct{}, error) {
 	return l.signals, nil
 }
 
@@ -132,7 +132,7 @@ func TestRunReloadsOnSignal(t *testing.T) {
 	waitFor(t, func() bool { return calls.Load() >= 1 }, "первичная загрузка")
 
 	current.Store(2)
-	lst.signals <- syncstore.Signal{Channel: "test"}
+	lst.signals <- struct{}{}
 	waitFor(t, func() bool {
 		v, err := st.Get(t.Context())
 		return err == nil && v == 2
@@ -160,7 +160,7 @@ func TestReloadErrorKeepsOldValue(t *testing.T) {
 	go st.Run(t.Context())
 	waitFor(t, func() bool { return calls.Load() == 1 }, "первичная загрузка")
 
-	lst.signals <- syncstore.Signal{}
+	lst.signals <- struct{}{}
 	waitFor(t, func() bool { return reported.Load() == 1 }, "ошибка перезагрузки отрепорчена")
 
 	v, err := st.Get(t.Context())
@@ -187,7 +187,7 @@ func TestReloadErrorRetries(t *testing.T) {
 	go st.Run(t.Context())
 	waitFor(t, func() bool { return calls.Load() == 1 }, "первичная загрузка")
 
-	lst.signals <- syncstore.Signal{}
+	lst.signals <- struct{}{}
 	waitFor(t, func() bool {
 		v, err := st.Get(t.Context())
 		return err == nil && v == 3
@@ -228,7 +228,7 @@ func TestDebounceCoalescesSignals(t *testing.T) {
 	waitFor(t, func() bool { return calls.Load() == 1 }, "первичная загрузка")
 
 	for range 5 {
-		lst.signals <- syncstore.Signal{}
+		lst.signals <- struct{}{}
 	}
 	waitFor(t, func() bool { return calls.Load() == 2 }, "перечитка после debounce")
 	time.Sleep(150 * time.Millisecond)
