@@ -3,7 +3,7 @@ module github.com/HiveTraum/syncstore/syncstorepgx
 go 1.26.3
 
 require (
-	github.com/HiveTraum/syncstore v0.1.0
+	github.com/HiveTraum/syncstore v0.3.0
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/jackc/pgx/v5 v5.10.0
 )

@@ -90,7 +90,8 @@ func TestSourceFuncSyncsOverPostgres(t *testing.T) {
 	if _, err := pool.Exec(ctx, `INSERT INTO syncstore_it VALUES ('greeting', 'hello')`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `SELECT pg_notify('syncstore_it_changed', '')`); err != nil {
+	// сигналим методом самого хранилища — notifier драйвер подключил сам
+	if err := st.Notify(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -123,10 +124,18 @@ func TestTableSourceSyncsOverPostgres(t *testing.T) {
 
 	waitForListen(t, ctx, pool, "syncstore_it_rows_changed")
 
-	if _, err := pool.Exec(ctx, `INSERT INTO syncstore_it_rows VALUES ('greeting', 'hello'), ('noise', 'skip me')`); err != nil {
+	// запись и сигнал — в одной транзакции: NOTIFY уйдёт после коммита
+	tx, err := pool.Begin(ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `SELECT pg_notify('syncstore_it_rows_changed', '')`); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO syncstore_it_rows VALUES ('greeting', 'hello'), ('noise', 'skip me')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := syncstorepgx.Notify(ctx, tx, "syncstore_it_rows_changed"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
 

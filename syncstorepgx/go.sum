@@ -1,5 +1,5 @@
-github.com/HiveTraum/syncstore v0.1.0 h1:4dZPsqJLlENbsjDpJq1Hrjf7AoAR2BMb2WXkaVRudxA=
-github.com/HiveTraum/syncstore v0.1.0/go.mod h1:i9DChxZAMqMusSVTT/4N+zwwwqM1mH1X6X9WCM7fjPE=
+github.com/HiveTraum/syncstore v0.3.0 h1:g5pvjhfiI82n7VrBYj8jJtY2T8TS/tZFkvHmYHRleiQ=
+github.com/HiveTraum/syncstore v0.3.0/go.mod h1:i9DChxZAMqMusSVTT/4N+zwwwqM1mH1X6X9WCM7fjPE=
 github.com/Masterminds/squirrel v1.5.4 h1:uUcX/aBc8O7Fg9kaISIUsHXdKuqehiXAMQTYX8afzqM=
 github.com/Masterminds/squirrel v1.5.4/go.mod h1:NNaOrjSoIDfDA40n7sr2tPNZRfjzjA400rg+riTZj10=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

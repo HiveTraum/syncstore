@@ -71,8 +71,26 @@ store := syncstorepgx.New(pool, "rates_changed",
 
 ## Как сигналить об изменениях
 
-Из кода приложения — `SELECT pg_notify('rates_changed', '')` рядом с записью
-(в той же транзакции), либо триггером на таблице:
+Проще всего — методом самого хранилища (notifier драйвер подключает сам):
+
+```go
+err := store.Notify(ctx) // pg_notify(channel, '') через пул
+```
+
+Строже — в той же транзакции, что и запись: `NOTIFY` уйдёт только после
+коммита, и перечитка гарантированно увидит зафиксированные данные:
+
+```go
+tx, _ := pool.Begin(ctx)
+// ... запись ...
+syncstorepgx.Notify(ctx, tx, "rates_changed")
+tx.Commit(ctx)
+```
+
+Писателю без хранилища (другой сервис) — `syncstorepgx.NewNotifier(pool,
+"rates_changed")`, это `syncstore.Notifier` для передачи зависимостью.
+
+Без Go-кода — триггером на таблице:
 
 ```sql
 CREATE OR REPLACE FUNCTION notify_rates_changed() RETURNS trigger AS $$
@@ -86,9 +104,6 @@ CREATE TRIGGER rates_changed
 AFTER INSERT OR UPDATE OR DELETE ON rates
 FOR EACH STATEMENT EXECUTE FUNCTION notify_rates_changed();
 ```
-
-`NOTIFY` доставляется только после коммита транзакции, так что перечитка
-всегда видит зафиксированные данные.
 
 ## Разработка
 

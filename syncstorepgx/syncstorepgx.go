@@ -10,6 +10,7 @@ import (
 
 	"github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/HiveTraum/syncstore"
@@ -81,20 +82,25 @@ func WithStoreOptions(opts ...syncstore.Option) Option {
 // перечитывается через source. Один New слушает один канал; на другой
 // канал — отдельное хранилище.
 //
-// Запуск и чтение — по контракту [syncstore.Store]:
+// Запуск, чтение и сигнал — по контракту [syncstore.Store]:
 //
 //	go store.Run(ctx)
 //	v, err := store.Get(ctx)
+//	err = store.Notify(ctx) // pg_notify(channel, '') через пул
+//
+// Для сигнала из транзакции записи используйте [Notify].
 func New[T any](pool *pgxpool.Pool, channel string, source Source[T], opts ...Option) syncstore.Store[T] {
 	o := options{reconnectDelay: defaultReconnectDelay}
 	for _, opt := range opts {
 		opt(&o)
 	}
-	storeOpts := o.storeOpts
+	// дефолты драйвера идут первыми: явные опции из WithStoreOptions
+	// применятся позже и победят
+	base := []syncstore.Option{syncstore.WithNotifier(notifier{db: pool, channel: channel})}
 	if o.onError != nil {
-		// явный syncstore.WithOnError в storeOpts применится позже и победит
-		storeOpts = append([]syncstore.Option{syncstore.WithOnError(o.onError)}, storeOpts...)
+		base = append(base, syncstore.WithOnError(o.onError))
 	}
+	storeOpts := append(base, o.storeOpts...)
 	l := &listener{
 		pool:           pool,
 		channel:        channel,
@@ -103,6 +109,37 @@ func New[T any](pool *pgxpool.Pool, channel string, source Source[T], opts ...Op
 	}
 	load := func(ctx context.Context) (T, error) { return source(ctx, pool) }
 	return syncstore.New(l, load, storeOpts...)
+}
+
+// Execer выполняет запрос: подходят *pgxpool.Pool, *pgx.Conn и pgx.Tx.
+type Execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+// Notify посылает сигнал «данные изменились» в канал channel. Вызывайте в
+// той же транзакции, что и запись: NOTIFY доставляется после её коммита,
+// так что перечитка увидит уже зафиксированные данные.
+func Notify(ctx context.Context, db Execer, channel string) error {
+	if _, err := db.Exec(ctx, `SELECT pg_notify($1, '')`, channel); err != nil {
+		return fmt.Errorf("notify %s: %w", channel, err)
+	}
+	return nil
+}
+
+// NewNotifier — syncstore.Notifier поверх db (обычно пула) для канала
+// channel: для кода, которому сигнальщик передаётся зависимостью. Для
+// сигнала из транзакции записи используйте Notify.
+func NewNotifier(db Execer, channel string) syncstore.Notifier {
+	return notifier{db: db, channel: channel}
+}
+
+type notifier struct {
+	db      Execer
+	channel string
+}
+
+func (n notifier) Notify(ctx context.Context) error {
+	return Notify(ctx, n.db, n.channel)
 }
 
 var _ syncstore.Listener = (*listener)(nil)
