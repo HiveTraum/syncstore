@@ -15,6 +15,10 @@ import (
 // закрылся до отмены контекста — источник сигналов остановился насовсем.
 var ErrListenerStopped = errors.New("syncstore: listener stopped")
 
+// ErrNoNotifier возвращается из [Store.Notify], если хранилищу не задан
+// Notifier (опция [WithNotifier]).
+var ErrNoNotifier = errors.New("syncstore: notifier не задан")
+
 // Listener — источник сигналов об изменении данных. Сигнал — пустой
 // struct{}: чистый триггер перезагрузки, данных не несёт.
 //
@@ -55,4 +59,10 @@ type Store[T any] interface {
 	// канала сигналов (возвращает [ErrListenerStopped]); запускается одной
 	// горутиной на процесс.
 	Run(ctx context.Context) error
+
+	// Notify посылает сигнал «данные изменились»: значение перечитают все
+	// реплики, включая эту. Делегирует заданному [Notifier] (опция
+	// [WithNotifier]; драйверы задают его сами); без него возвращает
+	// [ErrNoNotifier].
+	Notify(ctx context.Context) error
 }

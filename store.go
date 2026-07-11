@@ -15,6 +15,7 @@ type options struct {
 	debounce      time.Duration
 	retryInterval time.Duration
 	onError       func(error)
+	notifier      Notifier
 }
 
 // WithDebounce откладывает перезагрузку на d после сигнала: пачка сигналов,
@@ -37,6 +38,12 @@ func WithOnError(fn func(error)) Option {
 	return func(o *options) { o.onError = fn }
 }
 
+// WithNotifier задаёт пишущую сторону для Store.Notify. Без неё Notify
+// возвращает ErrNoNotifier.
+func WithNotifier(n Notifier) Option {
+	return func(o *options) { o.notifier = n }
+}
+
 // New связывает источник сигналов и загрузчик в хранилище.
 func New[T any](listener Listener, load Loader[T], opts ...Option) Store[T] {
 	o := options{retryInterval: defaultRetryInterval}
@@ -55,6 +62,13 @@ type store[T any] struct {
 	mu     sync.RWMutex // защищает value/loaded
 	value  T
 	loaded bool
+}
+
+func (s *store[T]) Notify(ctx context.Context) error {
+	if s.opts.notifier == nil {
+		return ErrNoNotifier
+	}
+	return s.opts.notifier.Notify(ctx)
 }
 
 func (s *store[T]) Get(ctx context.Context) (T, error) {

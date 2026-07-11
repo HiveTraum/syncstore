@@ -237,6 +237,34 @@ func TestDebounceCoalescesSignals(t *testing.T) {
 	}
 }
 
+type fakeNotifier struct {
+	calls atomic.Int32
+}
+
+func (n *fakeNotifier) Notify(context.Context) error {
+	n.calls.Add(1)
+	return nil
+}
+
+func TestNotifyDelegatesToNotifier(t *testing.T) {
+	t.Parallel()
+	load := func(context.Context) (int, error) { return 1, nil }
+
+	bare := syncstore.New(newFakeListener(), load)
+	if err := bare.Notify(t.Context()); !errors.Is(err, syncstore.ErrNoNotifier) {
+		t.Fatalf("без notifier ожидали ErrNoNotifier, получили %v", err)
+	}
+
+	var n fakeNotifier
+	st := syncstore.New(newFakeListener(), load, syncstore.WithNotifier(&n))
+	if err := st.Notify(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if n.calls.Load() != 1 {
+		t.Fatalf("notifier вызван %d раз, ожидали 1", n.calls.Load())
+	}
+}
+
 func TestRunReturnsWhenListenerStops(t *testing.T) {
 	t.Parallel()
 	lst := newFakeListener()
